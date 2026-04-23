@@ -1,15 +1,4 @@
--- Safer loading check for Tablet executors
-if not game:IsLoaded() then
-    repeat task.wait() until game:IsLoaded()
-end
 
-local env = getgenv and getgenv() or _G
-local SCRIPT_FLAG = '_AVATAR_CHANGER_LOADED_'
-
-if env[SCRIPT_FLAG] then return end
-env[SCRIPT_FLAG] = true
-
--- The rest of your script starts here...
 local SGUI = game:GetService("StarterGui")
 cloneref = cloneref or function(...) return ... end
 
