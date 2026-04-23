@@ -1,9 +1,32 @@
+-- Safer loading check for Tablet executors
+if not game:IsLoaded() then
+    repeat task.wait() until game:IsLoaded()
+end
+
+local env = getgenv and getgenv() or _G
+local SCRIPT_FLAG = '_AVATAR_CHANGER_LOADED_'
+
+if env[SCRIPT_FLAG] then return end
+env[SCRIPT_FLAG] = true
+
+-- The rest of your script starts here...
+local SGUI = game:GetService("StarterGui")
+cloneref = cloneref or function(...) return ... end
+
+local service = setmetatable({}, {
+    __index = function(self, name)
+        local s = game:GetService(name)
+        rawset(self, name, cloneref(s))
+        return rawget(self, name)
+    end
+})
+
 if not game:IsLoaded() then
     game.Loaded:Wait()
 end
 
 local env = getgenv and getgenv() or _G
-local SCRIPT_FLAG = 'NAH HUB'
+local SCRIPT_FLAG = '_AVATAR_CHANGER_LOADED_'
 
 local SGUI = game:GetService("StarterGui")
 
@@ -1031,223 +1054,4 @@ local function create_esp_for_player(player)
             local distance = math.floor((my_root.Position - root.Position).Magnitude)
             
             local nameWidth = #player.Name * 4.25
-            local textOffset = math.max(12.5, height * 0.05)
-            
-            esp_data.Drawings.NameText.Position = Vector2.new(rootPos.X - nameWidth / 2 - 12, headPos.Y - textOffset)
-            
-            esp_data.Drawings.DistanceText.Text = string.format("[%d]", distance)
-            esp_data.Drawings.DistanceText.Position = Vector2.new(rootPos.X - nameWidth / 2 + nameWidth + 0.5, headPos.Y - textOffset)
-            esp_data.Drawings.DistanceText.Visible = not State.esp_show_only_highlights
-        else
-            esp_data.Drawings.NameText.Position = Vector2.new(rootPos.X - (#player.Name * 3.25), headPos.Y - textOffset)
-            esp_data.Drawings.DistanceText.Visible = false
-        end
-        
-        if player.Team and State.esp_show_teamname then
-            esp_data.Drawings.TeamText.Text = player.Team.Name
-            esp_data.Drawings.TeamText.Position = Vector2.new(rootPos.X, legPos.Y + 5)
-            esp_data.Drawings.TeamText.Visible = not State.esp_show_only_highlights
-        else
-            esp_data.Drawings.TeamText.Visible = false
-        end
-        
-        local healthPercentage = humanoid.Health / humanoid.MaxHealth
-        local barHeight = height
-        
-        esp_data.Drawings.HealthBarOutline.From = Vector2.new(rootPos.X - width / 2 - 7, headPos.Y)
-        esp_data.Drawings.HealthBarOutline.To = Vector2.new(rootPos.X - width / 2 - 7, legPos.Y)
-        esp_data.Drawings.HealthBarOutline.Visible = not State.esp_show_only_highlights
-        
-        local healthBarLength = barHeight * healthPercentage
-        esp_data.Drawings.HealthBar.From = Vector2.new(rootPos.X - width / 2 - 7, legPos.Y)
-        esp_data.Drawings.HealthBar.To = Vector2.new(rootPos.X - width / 2 - 7, legPos.Y - healthBarLength)
-        esp_data.Drawings.HealthBar.Visible = not State.esp_show_only_highlights
-        
-        local r = math.floor((1 - healthPercentage) * 255)
-        local g = math.floor(healthPercentage * 255)
-        esp_data.Drawings.HealthBar.Color = Color3.fromRGB(r, g, 0)
-        
-        local healthPercent = math.floor(healthPercentage * 100)
-        esp_data.Drawings.HealthText.Text = tostring(healthPercent)
-        esp_data.Drawings.HealthText.Position = Vector2.new(rootPos.X - width / 2 - 30, legPos.Y - healthBarLength - 1)
-        esp_data.Drawings.HealthText.Visible = not State.esp_show_only_highlights
-        
-        local weapon = character:FindFirstChildWhichIsA("Tool")
-        if not weapon or is_weapon_blacklisted(weapon.Name) then
-            local backpack = player:FindFirstChild("Backpack")
-            if backpack then
-                weapon = nil
-                for _, tool in ipairs(backpack:GetChildren()) do
-                    if tool:IsA("Tool") and not is_weapon_blacklisted(tool.Name) then
-                        weapon = tool
-                        break
-                    end
-                end
-            else
-                weapon = nil
-            end
-        end
-        
-        if weapon then
-            local teamColor = Color3.fromRGB(255, 255, 255)
-            if player.Team then
-                if player.Team.TeamColor then
-                    teamColor = player.Team.TeamColor.Color
-                elseif player.TeamColor then
-                    teamColor = player.TeamColor.Color
-                end
-            end
-            
-            esp_data.Drawings.WeaponText.Color = teamColor
-            esp_data.Drawings.WeaponText.Text = string.format("[%s]", weapon.Name)
-            esp_data.Drawings.WeaponText.Position = Vector2.new(rootPos.X, legPos.Y + (State.esp_show_teamname and 20 or 5))
-            esp_data.Drawings.WeaponText.Visible = true
-        else
-            esp_data.Drawings.WeaponText.Visible = false
-        end
-    end
-    
-    local function cleanup_esp()
-        if esp_data.Highlight then
-            esp_data.Highlight:Destroy()
-            esp_data.Highlight = nil
-        end
-        for _, drawing in pairs(esp_data.Drawings) do
-            drawing:Remove()
-        end
-        esp_data.Drawings = {}
-        for _, conn in pairs(esp_data.Connections) do
-            conn:Disconnect()
-        end
-        esp_data.Connections = {}
-    end
-    
-    table.insert(esp_data.Connections, player.CharacterAdded:Connect(function()
-        cleanup_esp()
-        task.wait(0.07)
-        if next(esp_data.Drawings) == nil then
-            create_drawings()
-        end
-        update_esp()
-    end))
-    
-    table.insert(esp_data.Connections, player.CharacterRemoving:Connect(function()
-        cleanup_esp()
-    end))
-    
-    create_drawings()
-    
-    if ESPSystem.Enabled then
-        update_esp()
-    end
-    
-    ESPSystem.ESPs[player] = esp_data
-end
-
-function ESPSystem.CreateESPForPlayer(player)
-    if ESPSystem.ESPs[player] then
-        ESPSystem.RemoveESP(player)
-    end
-    create_esp_for_player(player)
-end
-
-function ESPSystem.RemoveESP(player)
-    local esp_data = ESPSystem.ESPs[player]
-    if not esp_data then return end
-    
-    pcall(function()
-        if esp_data.Highlight then
-            esp_data.Highlight.Enabled = false
-            esp_data.Highlight:Destroy()
-            esp_data.Highlight = nil
-        end
-    end)
-    
-    for _, drawing in pairs(esp_data.Drawings) do
-        pcall(function()
-            drawing.Visible = false
-            drawing:Remove()
-        end)
-    end
-    esp_data.Drawings = {}
-    
-    for _, conn in pairs(esp_data.Connections) do
-        pcall(function()
-            conn:Disconnect()
-        end)
-    end
-    esp_data.Connections = {}
-    
-    ESPSystem.ESPs[player] = nil
-end
-
-function ESPSystem.Toggle(enabled)
-    ESPSystem.Enabled = enabled
-    
-    if enabled then
-        for _, player in ipairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer then
-                ESPSystem.CreateESPForPlayer(player)
-            end
-        end
-    else
-        for player, esp_data in pairs(ESPSystem.ESPs) do
-            if esp_data.Highlight then
-                esp_data.Highlight.Enabled = false
-            end
-            for _, drawing in pairs(esp_data.Drawings) do
-                drawing.Visible = false
-            end
-        end
-        
-        for player, _ in pairs(ESPSystem.ESPs) do
-            ESPSystem.RemoveESP(player)
-        end
-    end
-end
-
-function ESPSystem.RefreshAll()
-    for player, esp_data in pairs(ESPSystem.ESPs) do
-        if player.Character then
-            local root = player.Character:FindFirstChild("HumanoidRootPart")
-            local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
-            if root and humanoid and humanoid.Health > 0 then
-                if ESPSystem.TeamCheck and player.Team == LocalPlayer.Team then
-                    if esp_data.Highlight then
-                        esp_data.Highlight.Enabled = false
-                    end
-                    for _, drawing in pairs(esp_data.Drawings) do
-                        drawing.Visible = false
-                    end
-                else
-                    if esp_data.Highlight and State.esp_highlights then
-                        esp_data.Highlight.Enabled = true
-                    end
-                end
-            end
-        end
-    end
-end
-
-function ESPSystem.RefreshHighlights()
-    for player, esp_data in pairs(ESPSystem.ESPs) do
-        if player.Character then
-            local character = player.Character
-            local root = character:FindFirstChild("HumanoidRootPart")
-            local humanoid = character:FindFirstChildOfClass("Humanoid")
-            
-            if root and humanoid and humanoid.Health > 0 then
-                if State.esp_highlights then
-                    if not esp_data.Highlight then
-                        local highlight = Instance.new("Highlight")
-                        highlight.Name = "ESP_Highlight"
-                        highlight.Adornee = character
-                        
-                        local teamColor = Color3.fromRGB(255, task.spawn(function()
-    task.wait(2) -- Wait for the menu to appear
-    for _, v in pairs(game:GetDescendants()) do
-        if v:IsA("TextLabel") and v.Text == "Aura Hub" then
-            v.Text = "NAH HUB"
-        end
-    end
-end)
+      
